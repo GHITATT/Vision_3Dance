@@ -56,6 +56,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("video", nargs="?", default=None)
     parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--scale", type=float, default=1.0)
     args = parser.parse_args()
 
     # Use different default ports for video vs webcam
@@ -71,9 +72,11 @@ def main():
             ["ffplay", "-autoexit", "-loglevel", "warning", args.video]
         )
         cap = cv2.VideoCapture(args.video)
+        is_video = True
     else:
         proc = None
         cap = cv2.VideoCapture(0)
+        is_video = False
     if not cap.isOpened():
         return
 
@@ -97,7 +100,25 @@ def main():
         r = pose.process(rgb)
 
         if r.pose_landmarks:
-            pts = [[lm.x, lm.y, lm.z] for lm in r.pose_landmarks.landmark]
+            landmarks = r.pose_landmarks.landmark
+            
+            # # Normalize by head-to-feet distance
+            # head_y = landmarks[0].y  # nose
+            # left_foot_y = landmarks[27].y  # left ankle
+            # right_foot_y = landmarks[28].y  # right ankle
+            # foot_y = (left_foot_y + right_foot_y) / 2
+            # height = abs(head_y - foot_y)
+            
+            # Calculate feet Y position to shift body so feet are at y=0
+            left_foot_y = landmarks[27].y  # left ankle
+            right_foot_y = landmarks[28].y  # right ankle
+            foot_y = (left_foot_y + right_foot_y) / 2
+            
+            if is_video:
+                # Invert x-coordinate for video to match Unity's coordinate system
+                pts = [[(1.0 - lm.x) * args.scale, (lm.y - foot_y) * args.scale, lm.z] for lm in landmarks]
+            else:
+                pts = [[lm.x * args.scale, (lm.y - foot_y) * args.scale, lm.z] for lm in landmarks]
         else:
             pts = []
 
